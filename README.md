@@ -1,252 +1,235 @@
-# DATA BATTLE 2026 — Storm End Prediction
-### Meteorage × IA Pau | Complete Guide
+# DATA BATTLE 2026 — Prédiction de fin d'orage
+### Meteorage × IA Pau | Équipe AllClear
 
 ---
 
-## What This Project Does
+## Ce que fait ce projet
 
-Airports need to know **when a thunderstorm is truly over** so they can resume
-operations. Today, the rule is simple: wait 30 minutes after the last
-lightning strike. The problem: many storms end well before 30 minutes — and
-every wasted minute costs money.
+Les aéroports ont besoin de savoir **quand un orage est vraiment terminé** pour reprendre les opérations au sol. Aujourd'hui, la règle est simple : attendre 30 minutes après le dernier éclair. Le problème : beaucoup d'orages se terminent bien avant — et chaque minute perdue coûte de l'argent.
 
-This pipeline trains a machine learning model that **estimates in real time
-the probability that the current lightning strike is the last one** in an
-alert zone (20 km radius around an airport). When that probability crosses
-a threshold, the airport can safely lift the alert early.
+Ce pipeline entraîne un modèle de machine learning qui **estime en temps réel la probabilité que l'éclair courant soit le dernier** dans une zone d'alerte (rayon de 20 km autour d'un aéroport). Quand cette probabilité dépasse un seuil, l'aéroport peut lever l'alerte plus tôt en toute sécurité.
 
 ---
 
-## Project Structure
+## Structure du projet
 
 ```
-databattle2026_pipeline.py   ← Main code (run this)
-requirements.txt             ← Python packages to install
-README.md                    ← This file
+databattle2026_pipeline.py   ← Code principal (à exécuter)
+requirements.txt             ← Packages Python à installer
+README.md                    ← Ce fichier
 
 outputs/
-  fig1_model_comparison.png  ← Model performance comparison
-  fig2_detailed_eval.png     ← ROC, Precision-Recall, Calibration
-  fig3_alert_simulation.png  ← Real alert timeline
+  fig1_model_comparison.png  ← Comparaison des performances des modèles
+  fig2_detailed_eval.png     ← ROC, Précision-Rappel, Calibration
+  fig3_alert_simulation.png  ← Simulation sur une vraie alerte
 ```
 
 ---
 
-## What You Need on Your Machine
+## Prérequis
 
 ### 1. Python 3.10+
-Check with:
+Vérifier avec :
 ```bash
 python --version
 ```
-Download from https://www.python.org if needed.
+Téléchargeable sur https://www.python.org si nécessaire.
 
-### 2. The data file
-Put `segment_alerts_all_airports_train.csv` in the **same folder** as
-`databattle2026_pipeline.py`.
+### 2. Le fichier de données
+Placer `segment_alerts_all_airports_train.csv` dans le **même dossier** que `databattle2026_pipeline.py`.
 
-### 3. Python packages
-Install everything at once:
+### 3. Packages Python
+Tout installer en une commande :
 ```bash
 pip install -r requirements.txt
 ```
 
-That installs:
-- **pandas / numpy** — data manipulation
-- **scikit-learn** — train/test split, metrics, logistic regression
-- **xgboost** — the main model (gradient boosted trees)
-- **matplotlib** — charts and figures
-- **pyarrow** — fast file saving (parquet format)
+Installe :
+- **pandas / numpy** — manipulation des données
+- **scikit-learn** — split, métriques, régression logistique, calibration
+- **xgboost** — modèle principal (arbres de décision boostés)
+- **matplotlib** — graphiques
+- **pyarrow** — sauvegarde rapide au format parquet
 
 ---
 
-## How to Run
+## Lancement
 
 ```bash
-# Navigate to the project folder
-cd path/to/your/project
+# Se placer dans le dossier du projet
+cd chemin/vers/le/projet
 
-# Run the full pipeline
+# Lancer le pipeline complet
 python databattle2026_pipeline.py
 ```
 
-That's it. The script will:
-1. Load and clean the CSV  (~1 sec)
-2. Engineer all features   (~3 min — rolling windows are slow)
-3. Train all models        (~2 min)
-4. Save 3 figures to ./outputs/
+Le script va :
+1. Charger et nettoyer le CSV (~1 sec)
+2. Calculer toutes les features (~3 min — les fenêtres glissantes sont lentes)
+3. Entraîner tous les modèles (~2 min)
+4. Sauvegarder 3 figures dans ./outputs/
 
 ---
 
-## How the Code Works (Step by Step)
+## Fonctionnement du code (étape par étape)
 
-### STEP 1 — Load Data
+### ÉTAPE 1 — Chargement des données
 
-The raw CSV has one row per lightning strike. We keep only strikes that
-belong to an **alert** (airport_alert_id is not null). This filters from
-507,071 to 56,599 rows.
+Le CSV brut contient une ligne par éclair. On ne conserve que les éclairs appartenant à une **alerte** (airport_alert_id non nul). Cela filtre de 507 071 à 56 599 lignes.
 
-The **target variable** is `is_last_lightning_cloud_ground`:
-- `True`  = this strike was the last cloud-to-ground strike of its alert
-- `False` = more strikes will follow
+La **variable cible** est `is_last_lightning_cloud_ground` :
+- `True`  = cet éclair était le dernier nuage-sol de son alerte
+- `False` = d'autres éclairs vont suivre
 
-This is a classic **binary classification** problem with severe class
-imbalance: only 4.6% of strikes are positives (last of their alert).
+Il s'agit d'un problème de **classification binaire** avec un fort déséquilibre de classes : seulement 4,6 % des éclairs sont positifs (derniers de leur alerte).
 
 ---
 
-### STEP 2 — Feature Engineering
+### ÉTAPE 2 — Feature engineering
 
-This is the most important step. Raw data only has: date, position,
-amplitude, distance. We need to give the model **context**: how active was
-the storm recently? Is it dying down? Has there been a long silence?
+C'est l'étape la plus importante. Les données brutes contiennent seulement : date, position, amplitude, distance. Il faut donner au modèle du **contexte** : l'orage est-il encore actif ? S'affaiblit-il ? Y a-t-il eu un long silence ?
 
-**A) Temporal position**
-- `elapsed_min` — how long has this alert been running?
-- `rank_in_alert` — is this the 1st, 5th, or 50th strike?
+**A) Position temporelle**
+- `elapsed_min` — depuis combien de temps cette alerte dure-t-elle ?
+- `rank_in_alert` — est-ce le 1er, 5e ou 50e éclair ?
 
-**B) Inter-strike time** ← most important feature
-- `inter_time_min` — time since the previous strike
-- Key intuition: a long silence before this strike = storm may be ending
+**B) Temps inter-éclairs** ← feature la plus importante
+- `inter_time_min` — temps depuis l'éclair précédent
+- Intuition : un long silence = l'orage est peut-être en train de se terminer
 
-**C) Rolling statistics (4 windows: 5 / 10 / 15 / 30 min)**
-For each strike, we look back at the last N minutes and compute:
-- `count_Xm` — how many strikes occurred? (storm intensity)
-- `amp_mean_Xm`, `amp_max_Xm` — amplitude statistics (energy level)
-- `dist_mean_Xm`, `dist_min_Xm` — distance statistics (proximity)
+**C) Statistiques glissantes (4 fenêtres : 5 / 10 / 15 / 30 min)**
+Pour chaque éclair, on regarde les N dernières minutes et on calcule :
+- `count_Xm` — combien d'éclairs ont eu lieu ? (intensité de l'orage)
+- `amp_mean_Xm`, `amp_max_Xm` — statistiques d'amplitude (niveau d'énergie)
+- `dist_mean_Xm`, `dist_min_Xm` — statistiques de distance (proximité)
 
-**D) Trend features**
-- `amp_trend_3` — is amplitude increasing or decreasing over last 3 strikes?
-- `dist_trend_3` — is the storm moving closer or further?
+**D) Features de tendance**
+- `amp_trend_3` — l'amplitude augmente-t-elle ou diminue-t-elle sur les 3 derniers éclairs ?
+- `dist_trend_3` — l'orage se rapproche-t-il ou s'éloigne-t-il ?
 
-**E) Intensity ratios**
+**E) Ratios d'intensité**
 - `intensity_ratio_5_15` = count_5m / count_15m
-- Close to 1.0 = storm still active recently
-- Close to 0.0 = storm dying down (recent activity much lower than past)
+- Proche de 1,0 = orage encore actif récemment
+- Proche de 0,0 = orage en train de mourir (activité récente bien inférieure au passé)
 
-**F) Spatial features**
-- `az_sin`, `az_cos` — direction of strike (azimuth as circular encoding)
-- `amp_x_dist` — powerful strikes close to airport = high risk
+**F) Features spatiales**
+- `az_sin`, `az_cos` — direction de l'éclair (azimut encodé de façon circulaire)
+- `amp_x_dist` — éclairs puissants proches de l'aéroport = risque élevé
 
-**G) Cyclical time**
-- `month_sin/cos`, `hour_sin/cos` — encoded so December is "close to" January
+**G) Temps cyclique**
+- `month_sin/cos`, `hour_sin/cos` — encodés pour que décembre soit "proche" de janvier
 
-**H) Airport identity**
-- `airport_enc` — integer 0-4, lets the model learn airport-specific patterns
+**H) Identité de l'aéroport**
+- `airport_enc` — entier 0-4, permet au modèle d'apprendre des patterns spécifiques à chaque aéroport
 
-> Why encode month as sin/cos?
-> If you just use month=12 and month=1, the model thinks they're far apart.
-> sin/cos wraps around: cos(360°) = cos(0°), so January and December are neighbors.
-
----
-
-### STEP 3 — Train/Test Split
-
-We split by **alert ID**, not by row. This is critical.
-
-**Wrong way (row split):** The model might see strike #5 of alert #42 during
-training and strike #8 of the same alert during testing. Since strikes from
-the same storm are correlated, this inflates performance metrics artificially.
-
-**Right way (group split):** All strikes from alert #42 go entirely to train
-OR entirely to test. The model is evaluated on storms it has never seen.
-
-We use 80% of alerts for training, 20% for testing.
+> Pourquoi encoder le mois en sin/cos ?
+> Avec mois=12 et mois=1, le modèle penserait qu'ils sont éloignés.
+> sin/cos boucle : cos(360°) = cos(0°), donc janvier et décembre sont voisins.
 
 ---
 
-### STEP 4 — Model Training
+### ÉTAPE 3 — Découpage train/test
 
-Three models are trained:
+On découpe par **ID d'alerte**, pas par ligne. C'est critique.
 
-| Model | How it works | Why we try it |
-|-------|-------------|---------------|
-| **Heuristic** | `prob = inter_time / 30` | Replicates today's fixed-timer approach |
-| **Logistic Regression** | Linear combination of features | Simple, interpretable baseline |
-| **XGBoost** | Ensemble of decision trees | Captures non-linear patterns, handles imbalance |
+**Mauvaise méthode (découpage par ligne) :** Le modèle pourrait voir l'éclair n°5 de l'alerte n°42 à l'entraînement et l'éclair n°8 de la même alerte au test. Comme les éclairs d'un même orage sont corrélés, cela gonfle artificiellement les métriques.
 
-XGBoost uses `scale_pos_weight = 19` (ratio of negatives to positives) to
-compensate for class imbalance. Without this, the model would just predict
-"not last" all the time and be right 95% of the time, which is useless.
+**Bonne méthode (découpage par groupe) :** Tous les éclairs de l'alerte n°42 vont entièrement en train OU entièrement en test. Le modèle est évalué sur des orages qu'il n'a jamais vus.
+
+On utilise 80 % des alertes pour l'entraînement, 20 % pour le test.
 
 ---
 
-### STEP 5 — Evaluation
+### ÉTAPE 4 — Entraînement des modèles
 
-Four metrics are reported:
+Quatre modèles sont comparés :
 
-- **AUC-ROC** (higher = better, max 1.0)
-  How well the model ranks positives above negatives.
-  0.5 = random, 1.0 = perfect.
+| Modèle | Fonctionnement | Pourquoi on l'essaie |
+|--------|---------------|----------------------|
+| **Heuristique** | `prob = inter_time / 30` | Reproduit l'approche du timer fixe actuel |
+| **Régression logistique** | Combinaison linéaire des features | Baseline simple et interprétable |
+| **Random Forest** | Ensemble d'arbres de décision | Capture les non-linéarités |
+| **XGBoost** | Arbres boostés par gradient | Modèle le plus performant, gère le déséquilibre |
 
-- **AUC-PR** (higher = better)
-  Precision-Recall area. More informative than ROC for imbalanced data.
-  A random classifier gets AUC-PR ≈ 0.046 (= base rate).
-
-- **Brier score** (lower = better)
-  Mean squared error of predicted probabilities vs. true labels.
-  Measures *calibration* as well as ranking.
-
-- **Log-loss** (lower = better)
-  Cross-entropy. Penalises confident wrong predictions heavily.
+XGBoost utilise `scale_pos_weight = 19` (ratio négatifs/positifs) pour compenser le déséquilibre de classes. Sans cela, le modèle prédirait "pas le dernier" en permanence et aurait raison 95 % du temps — ce qui est inutile.
 
 ---
 
-## Concrete Example: What the Model Does in Practice
+### ÉTAPE 5 — Calibration
 
-Imagine this sequence of events at Biarritz airport on a summer afternoon:
+Les probabilités brutes de XGBoost sont souvent trop confiantes. On applique une **calibration isotonique** (`CalibratedClassifierCV`) qui ajuste ces probabilités pour qu'elles correspondent à la réalité observée : si le modèle prédit 70 %, l'alerte doit effectivement se terminer dans 70 % des cas similaires.
+
+C'est ce score calibré qui est exposé comme **indicateur de confiance** à l'utilisateur.
+
+---
+
+### ÉTAPE 6 — Évaluation
+
+Quatre métriques sont reportées :
+
+- **AUC-ROC** (plus haut = mieux, max 1,0)
+  Capacité du modèle à classer les positifs au-dessus des négatifs.
+  0,5 = aléatoire, 1,0 = parfait.
+
+- **AUC-PR** (plus haut = mieux)
+  Aire sous la courbe Précision-Rappel. Plus informative que la ROC sur données déséquilibrées.
+  Un classifieur aléatoire obtient AUC-PR ≈ 0,046 (= taux de base).
+
+- **Brier score** (plus bas = mieux)
+  Erreur quadratique moyenne des probabilités prédites vs. vraies étiquettes.
+  Mesure la **calibration** autant que le classement.
+
+- **Log-loss** (plus bas = mieux)
+  Entropie croisée. Pénalise fortement les prédictions confiantes et fausses.
+
+---
+
+## Exemple concret : ce que fait le modèle en pratique
+
+Séquence d'événements à l'aéroport de Biarritz un après-midi d'été :
 
 ```
-14:00:00 — Strike at 18.3 km, amplitude -45 kA  → P(end) = 0.02  (storm just started)
-14:03:22 — Strike at 12.1 km, amplitude -31 kA  → P(end) = 0.01  (very active)
-14:07:55 — Strike at  9.4 km, amplitude -67 kA  → P(end) = 0.01  (strong, close)
-14:09:10 — Strike at 11.2 km, amplitude -22 kA  → P(end) = 0.03  (weakening a bit)
-14:14:03 — Strike at 16.8 km, amplitude -12 kA  → P(end) = 0.11  (long gap, far, weak)
-14:21:47 — Strike at 19.1 km, amplitude  -8 kA  → P(end) = 0.38  (7min gap, very weak, far)
-14:29:15 — Strike at 18.6 km, amplitude  -5 kA  → P(end) = 0.72  ← MODEL TRIGGERS
-                                                                    "Alert likely ending"
+14:00:00 — Éclair à 18,3 km, amplitude -45 kA  → P(fin) = 0,02  (orage qui commence)
+14:03:22 — Éclair à 12,1 km, amplitude -31 kA  → P(fin) = 0,01  (très actif)
+14:07:55 — Éclair à  9,4 km, amplitude -67 kA  → P(fin) = 0,01  (puissant, proche)
+14:09:10 — Éclair à 11,2 km, amplitude -22 kA  → P(fin) = 0,03  (légère baisse)
+14:14:03 — Éclair à 16,8 km, amplitude -12 kA  → P(fin) = 0,11  (long silence, loin, faible)
+14:21:47 — Éclair à 19,1 km, amplitude  -8 kA  → P(fin) = 0,38  (7 min de silence, très faible, loin)
+14:29:15 — Éclair à 18,6 km, amplitude  -5 kA  → P(fin) = 0,72  ← LE MODÈLE SE DÉCLENCHE
+                                                                    "Fin d'alerte probable"
 ```
 
-At 14:29:15:
-- It has been 7+ minutes since the last strike
-- The amplitude has dropped from 67 kA to 5 kA (very weak)
-- The storm is moving away (19 km, near edge of zone)
-- Activity in the last 5 minutes: 1 strike (vs. 4 strikes 30 min ago)
+À 14:29:15 :
+- Plus de 7 minutes depuis le dernier éclair
+- L'amplitude est passée de 67 kA à 5 kA (très faible)
+- L'orage s'éloigne (19 km, en bordure de zone)
+- Activité sur les 5 dernières minutes : 1 éclair (contre 4 il y a 30 min)
 
-The old system would wait until **14:59:15** (30 min after this strike) to
-lift the alert. The model recognises the storm is dying and suggests lifting
-it **now** (or at a lower probability threshold, even earlier).
+L'ancien système attendrait jusqu'à **14:59:15** (30 min après cet éclair) pour lever l'alerte. Le modèle reconnaît que l'orage se termine et suggère de la lever **maintenant**.
 
-**Time saved: ~30 minutes.**
+**Temps gagné : ~30 minutes.**
 
 ---
 
-## Results
+## Résultats
 
-| Model | AUC-ROC | AUC-PR | Brier |
-|-------|---------|--------|-------|
-| Heuristic (timer) | 0.606 | 0.164 | 0.039 |
-| Logistic Regression | 0.903 | 0.298 | 0.114 |
-| Random Forest | 0.953 | 0.505 | 0.063 |
-| **XGBoost** | **0.959** | **0.513** | **0.042** |
+| Modèle | AUC-ROC | AUC-PR | Brier |
+|--------|---------|--------|-------|
+| Heuristique (timer) | 0,606 | 0,164 | 0,039 |
+| Régression logistique | 0,903 | 0,298 | 0,114 |
+| Random Forest | 0,953 | 0,505 | 0,063 |
+| **XGBoost (calibré)** | **0,959** | **0,513** | **0,042** |
 
-The XGBoost model correctly identifies the last strike with an AUC-ROC of
-0.959 — meaning it ranks the true last strike above 95.9% of non-last strikes
-on average.
+Le modèle XGBoost identifie correctement le dernier éclair avec un AUC-ROC de 0,959 — il classe le vrai dernier éclair au-dessus de 95,9 % des éclairs non-finaux en moyenne.
 
 ---
 
-## Possible Next Steps
+## Pistes d'amélioration
 
-1. **Survival model** (Cox / Weibull) — frame this as "time until end of storm"
-   rather than classification. More theoretically grounded.
+1. **Modèle de survie** (Cox / Weibull) — reformuler le problème comme "temps jusqu'à la fin de l'orage" plutôt que classification. Plus solide théoriquement.
 
-2. **Per-airport models** — Pise and Biarritz have very different storm profiles.
-   Separate models may improve performance.
+2. **Modèles par aéroport** — Pise et Biarritz ont des profils d'orage très différents. Des modèles séparés pourraient améliorer les performances.
 
-3. **Threshold optimisation** — choose the probability cutoff that minimises
-   expected lost time for each airport (depends on the cost of false alarms
-   vs. unnecessary delays).
+3. **Optimisation du seuil** — choisir le seuil de probabilité qui minimise le temps perdu pour chaque aéroport (dépend du coût des fausses alarmes vs. des retards inutiles). Ce choix est une décision opérationnelle et RSE, pas purement technique.
 
-4. **Temporal cross-validation** — train on years 2016-2020, test on 2021-2022
-   to simulate a true production deployment.
+4. **Validation croisée temporelle** — entraîner sur 2016-2020, tester sur 2021-2022 pour simuler un vrai déploiement en production.
