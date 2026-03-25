@@ -1,0 +1,31 @@
+{
+  "global": {
+    "auc": 0.9662,
+    "brier": 0.0178
+  },
+  "airports": {
+    "Ajaccio": {
+      "auc": 0.9675,
+      "brier": 0.0226
+    },
+    "Bastia": {
+      "auc": 0.9792,
+      "brier": 0.0105
+    },
+    "Biarritz": {
+      "auc": 0.9385,
+      "brier": 0.0349
+    },
+    "Nantes": {
+      "auc": 0.9208,
+      "brier": 0.0303
+    },
+    "Pise": {
+      "auc": 0.9682,
+      "brier": 0.0151
+    }
+  },
+  "minutes_saved": 30.0,
+  "baseline_minutes": 30,
+  "threshold": 0.3
+}

@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AllClear — Fin d'alerte foudre en temps réel</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --black:#000;--g950:#0a0a0a;--g900:#111;--g800:#1c1c1e;--g700:#2c2c2e;
+  --g500:#636366;--g300:#aeaeb2;--white:#fff;
+  --blue:#0A84FF;--blue-d:rgba(10,132,255,0.15);
+  --green:#30d158;--orange:#ff9f0a;--red:#ff453a;
+  --border:rgba(255,255,255,0.08);--border-b:rgba(255,255,255,0.13);
+  --rm:10px;--rl:16px;--rxl:24px;--rxxl:32px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;-webkit-font-smoothing:antialiased}
+body{font-family:'Outfit',-apple-system,sans-serif;background:var(--black);color:var(--white);overflow-x:hidden;font-size:17px;line-height:1.5}
+::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:var(--black)}::-webkit-scrollbar-thumb{background:var(--g700);border-radius:3px}
+
+/* NAV */
+nav{position:fixed;top:0;left:0;right:0;z-index:1000;height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 28px;background:rgba(0,0,0,0.75);backdrop-filter:saturate(180%) blur(20px);border-bottom:1px solid var(--border)}
+.nav-logo{font-size:16px;font-weight:600;color:var(--white)}.nav-logo span{color:var(--blue)}
+.nav-links{display:flex;gap:24px;list-style:none}
+.nav-links a{font-size:13px;font-weight:400;color:var(--g300);text-decoration:none;transition:color .15s}
+.nav-links a:hover{color:var(--white)}
+
+/* HERO */
+.hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:100px 24px 80px;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;top:-10%;left:50%;transform:translateX(-50%);width:900px;height:700px;border-radius:50%;background:radial-gradient(ellipse,rgba(10,132,255,0.07) 0%,transparent 65%);pointer-events:none}
+.eyebrow-badge{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:500;color:var(--blue);margin-bottom:28px;position:relative;z-index:1;animation:rise .9s cubic-bezier(.16,1,.3,1) both}
+.live-dot{width:7px;height:7px;border-radius:50%;background:var(--green);animation:lpulse 2.5s infinite}
+@keyframes lpulse{0%{box-shadow:0 0 0 0 rgba(48,209,88,.5)}70%{box-shadow:0 0 0 8px rgba(48,209,88,0)}100%{box-shadow:0 0 0 0 rgba(48,209,88,0)}}
+.hero h1{font-size:clamp(52px,9vw,96px);font-weight:800;line-height:1.0;letter-spacing:-3px;color:var(--white);position:relative;z-index:1;animation:rise .9s .08s cubic-bezier(.16,1,.3,1) both}
+.hero h1 .blue{color:var(--blue)}
+.hero-sub{font-size:clamp(17px,2vw,21px);font-weight:300;color:var(--g300);max-width:560px;line-height:1.65;margin:20px auto 0;letter-spacing:-.2px;position:relative;z-index:1;animation:rise .9s .16s cubic-bezier(.16,1,.3,1) both}
+.hero-cta{margin-top:40px;display:flex;gap:14px;justify-content:center;position:relative;z-index:1;animation:rise .9s .24s cubic-bezier(.16,1,.3,1) both}
+.btn-p{background:var(--blue);color:var(--white);border:none;border-radius:980px;padding:14px 28px;font-size:15px;font-weight:600;font-family:'Outfit',sans-serif;cursor:pointer;text-decoration:none;transition:background .2s,transform .1s;display:inline-flex;align-items:center}
+.btn-p:hover{background:#0071e3}.btn-p:active{transform:scale(.97)}
+.btn-g{background:transparent;color:var(--blue);border:1.5px solid rgba(10,132,255,.4);border-radius:980px;padding:14px 28px;font-size:15px;font-weight:500;font-family:'Outfit',sans-serif;cursor:pointer;text-decoration:none;transition:all .2s;display:inline-flex;align-items:center}
+.btn-g:hover{border-color:var(--blue);background:var(--blue-d)}
+.hstats{display:flex;gap:0;margin-top:80px;position:relative;z-index:1;border:1px solid var(--border);border-radius:var(--rxl);overflow:hidden;background:rgba(255,255,255,.02);animation:rise .9s .32s cubic-bezier(.16,1,.3,1) both}
+.hstat{padding:28px 44px;text-align:center;border-right:1px solid var(--border)}.hstat:last-child{border-right:none}
+.hstat .num{font-size:38px;font-weight:700;color:var(--white);letter-spacing:-1.5px;line-height:1}
+.hstat .num .unit{font-size:20px;font-weight:500;color:var(--g300)}
+.hstat .lbl{font-size:12px;color:var(--g500);margin-top:6px}
+
+/* SECTIONS */
+.sec{max-width:1080px;margin:0 auto;padding:120px 24px}
+.eyebrow{font-size:13px;font-weight:600;letter-spacing:.5px;color:var(--blue);text-transform:uppercase;margin-bottom:14px}
+.sec-title{font-size:clamp(34px,4vw,52px);font-weight:700;line-height:1.08;letter-spacing:-1.5px;margin-bottom:16px}
+.sec-body{font-size:17px;font-weight:300;color:var(--g300);max-width:520px;line-height:1.65;letter-spacing:-.1px}
+
+/* CARDS */
+.cgrid{display:grid;grid-template-columns:1fr 1fr;gap:2px;margin-top:56px;border-radius:var(--rxxl);overflow:hidden;border:1px solid var(--border)}
+.fcard{background:var(--g900);padding:36px;transition:background .2s}.fcard:hover{background:var(--g800)}
+.fcard-ico{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;margin-bottom:20px}
+.fcard-ico.r{background:rgba(255,69,58,.12)}.fcard-ico.o{background:rgba(255,159,10,.12)}.fcard-ico.g{background:rgba(48,209,88,.12)}.fcard-ico.b{background:rgba(10,132,255,.12)}
+.fcard h3{font-size:19px;font-weight:600;letter-spacing:-.4px;margin-bottom:10px}
+.fcard p{font-size:14px;font-weight:300;color:var(--g300);line-height:1.7}
+.bstat{font-size:42px;font-weight:700;letter-spacing:-2px;margin-top:20px;line-height:1}
+.bstat.r{color:var(--red)}.bstat.o{color:var(--orange)}.bstat.g{color:var(--green)}.bstat.b{color:var(--blue)}
+
+/* PIPELINE */
+.pipeline{margin-top:64px;border:1px solid var(--border);border-radius:var(--rxxl);overflow:hidden}
+.pstep{display:flex;align-items:flex-start;gap:28px;padding:36px 40px;border-bottom:1px solid var(--border);transition:background .2s}.pstep:last-child{border-bottom:none}.pstep:hover{background:rgba(255,255,255,.02)}
+.pnum{width:36px;height:36px;border-radius:50%;background:var(--blue-d);border:1px solid rgba(10,132,255,.3);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:var(--blue);flex-shrink:0;margin-top:2px}
+.pcont h3{font-size:18px;font-weight:600;letter-spacing:-.4px;margin-bottom:6px}
+.pcont p{font-size:14px;font-weight:300;color:var(--g300);line-height:1.7;max-width:640px}
+.tags{display:flex;flex-wrap:wrap;gap:7px;margin-top:14px}
+.tag{font-size:12px;font-weight:500;color:var(--blue);background:var(--blue-d);border:1px solid rgba(10,132,255,.2);border-radius:6px;padding:3px 10px}
+.tag.g{color:var(--green);background:rgba(48,209,88,.1);border-color:rgba(48,209,88,.2)}
+.tag.o{color:var(--orange);background:rgba(255,159,10,.1);border-color:rgba(255,159,10,.2)}
+
+/* CODE BLOCK */
+.code-block{background:var(--g950);border:1px solid var(--border);border-radius:var(--rl);padding:20px 24px;margin-top:16px;overflow-x:auto}
+.code-block pre{font-family:'SF Mono','Fira Code',monospace;font-size:12px;line-height:1.7;color:var(--g300)}
+.code-block pre .kw{color:#fc73a4}
+.code-block pre .fn{color:#79c0ff}
+.code-block pre .st{color:#a5d6ff}
+.code-block pre .cm{color:var(--g500)}
+.code-block pre .num{color:var(--orange)}
+
+/* CHOIX TECHNIQUES */
+.choice-grid{display:grid;grid-template-columns:1fr 1fr;gap:2px;margin-top:40px;border:1px solid var(--border);border-radius:var(--rxxl);overflow:hidden}
+.choice-card{background:var(--g900);padding:32px;transition:background .2s}.choice-card:hover{background:var(--g800)}
+.choice-q{font-size:12px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--g500);margin-bottom:8px}
+.choice-a{font-size:17px;font-weight:600;color:var(--white);margin-bottom:10px;letter-spacing:-.3px}
+.choice-why{font-size:13px;font-weight:300;color:var(--g300);line-height:1.65}
+
+/* DEMO */
+.demo-wrap{max-width:1200px;margin:0 auto;padding:0 24px 120px}
+.demo-shell{border:1px solid var(--border);border-radius:var(--rxxl);overflow:hidden;background:var(--g900);position:relative}
+.demo-bar{background:var(--g800);border-bottom:1px solid var(--border);padding:18px 28px;display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end}
+.ctrl{display:flex;flex-direction:column;gap:6px}
+.ctrl label{font-size:11px;font-weight:500;color:var(--g500);text-transform:uppercase;letter-spacing:.6px}
+select{background:var(--g900);border:1px solid var(--border-b);border-radius:var(--rm);color:var(--white);font-size:14px;font-family:'Outfit',sans-serif;padding:9px 14px;outline:none;cursor:pointer;transition:border-color .15s;appearance:none;min-width:160px}
+select:focus{border-color:var(--blue)}
+input[type=range]{height:3px;cursor:pointer;accent-color:var(--blue);width:140px;margin-top:8px}
+.dbtn{display:inline-flex;align-items:center;gap:7px;padding:10px 20px;border-radius:var(--rm);font-size:14px;font-weight:600;font-family:'Outfit',sans-serif;cursor:pointer;border:none;transition:opacity .15s,transform .1s}
+.dbtn:active{transform:scale(.97)}
+.dbtn.p{background:var(--blue);color:var(--white)}.dbtn.p:hover{background:#0071e3}.dbtn.p:disabled{background:var(--g700);color:var(--g500);cursor:default}
+.dbtn.s{background:var(--g700);color:var(--g100)}.dbtn.s:disabled{opacity:.4;cursor:default}
+.demo-body{display:grid;grid-template-columns:1fr 360px;height:500px}
+#map{width:100%;height:100%}
+.dside{display:flex;flex-direction:column;border-left:1px solid var(--border);overflow:hidden}
+.prob-sec{padding:28px 24px 20px;border-bottom:1px solid var(--border)}
+.prob-cap{font-size:11px;font-weight:500;letter-spacing:.6px;text-transform:uppercase;color:var(--g500);margin-bottom:10px}
+.prob-num{font-size:64px;font-weight:700;line-height:1;letter-spacing:-3px;color:var(--white);transition:color .4s}
+.prob-track{margin-top:16px;height:4px;background:var(--g700);border-radius:2px;overflow:hidden}
+.prob-fill{height:100%;border-radius:2px;background:var(--blue);transition:width .5s ease,background .4s}
+.prob-lbl{margin-top:10px;font-size:13px;color:var(--g500);min-height:20px;transition:color .3s}
+.chart-sec{flex:1;padding:20px;min-height:0}.chart-sec canvas{max-height:170px}
+.dfooter{padding:14px 24px;border-top:1px solid var(--border);background:var(--g800);display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.kpi{display:flex;flex-direction:column;gap:3px}
+.kpi-k{font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.6px;color:var(--g500)}
+.kpi-v{font-size:15px;font-weight:600;letter-spacing:-.3px}
+.loading-ov{position:absolute;inset:0;z-index:200;background:rgba(0,0,0,0.92);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
+.spin{width:36px;height:36px;border-radius:50%;border:2.5px solid rgba(255,255,255,.1);border-top-color:var(--blue);animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.ltxt{font-size:14px;color:var(--g300)}.lhint{font-size:12px;color:var(--g500);text-align:center;line-height:1.6;max-width:320px}
+.lhint code{color:var(--blue);background:var(--blue-d);padding:1px 6px;border-radius:4px}
+
+/* METRICS */
+.mband{display:grid;grid-template-columns:repeat(4,1fr);gap:2px;margin-top:56px;border:1px solid var(--border);border-radius:var(--rxxl);overflow:hidden}
+.mcard{background:var(--g900);padding:32px 28px;transition:background .2s}.mcard:hover{background:var(--g800)}
+.mcard-lbl{font-size:12px;font-weight:500;color:var(--g500);letter-spacing:.3px;text-transform:uppercase;margin-bottom:12px}
+.mcard-val{font-size:44px;font-weight:700;letter-spacing:-2px;color:var(--white);line-height:1}
+.mcard-val.b{color:var(--blue)}.mcard-val.g{color:var(--green)}.mcard-val.o{color:var(--orange)}
+.mcard-desc{font-size:13px;font-weight:300;color:var(--g500);margin-top:10px;line-height:1.5}
+
+/* TABLE */
+.res-table{width:100%;border-collapse:collapse;margin-top:32px;font-size:14px}
+.res-table th{text-align:left;padding:12px 16px;font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--g500);border-bottom:1px solid var(--border)}
+.res-table td{padding:14px 16px;border-bottom:1px solid rgba(255,255,255,0.04)}
+.res-table tr:last-child td{border-bottom:none}
+.res-table tr:hover td{background:rgba(255,255,255,0.02)}
+.pill{display:inline-block;padding:3px 10px;border-radius:6px;font-size:12px;font-weight:500}
+.pill.g{background:rgba(48,209,88,.12);color:var(--green)}
+.pill.o{background:rgba(255,159,10,.12);color:var(--orange)}
+.pill.b{background:rgba(10,132,255,.12);color:var(--blue)}
+
+/* THETA TABLE */
+.theta-table{width:100%;border-collapse:collapse;margin-top:32px;font-size:13px;font-family:'SF Mono','Fira Code',monospace}
+.theta-table th{text-align:left;padding:10px 16px;font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--g500);border-bottom:1px solid var(--border);font-family:'Outfit',sans-serif}
+.theta-table td{padding:11px 16px;border-bottom:1px solid rgba(255,255,255,0.04)}
+.theta-table tr.best td{background:rgba(48,209,88,0.06)}
+.theta-table tr:hover td{background:rgba(255,255,255,0.02)}
+
+.cpair{display:grid;grid-template-columns:1fr 1fr;gap:2px;margin-top:2px;border:1px solid var(--border);border-radius:var(--rxxl);overflow:hidden}
+.cbox{background:var(--g900);padding:32px}
+.cbox h3{font-size:13px;font-weight:500;letter-spacing:.3px;text-transform:uppercase;color:var(--g500);margin-bottom:24px}
+
+/* RSE */
+.rgrid{display:grid;grid-template-columns:1fr 1fr;gap:2px;margin-top:56px;border:1px solid var(--border);border-radius:var(--rxxl);overflow:hidden}
+.rcard{background:var(--g900);padding:36px;transition:background .2s}.rcard:hover{background:var(--g800)}
+.rchip{display:inline-block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;padding:4px 10px;border-radius:6px;margin-bottom:18px}
+.rchip.w{background:rgba(255,159,10,.12);color:var(--orange)}.rchip.d{background:rgba(255,69,58,.12);color:var(--red)}.rchip.i{background:rgba(10,132,255,.12);color:var(--blue)}.rchip.n{background:rgba(255,255,255,.06);color:var(--g300)}
+.rcard h3{font-size:19px;font-weight:600;letter-spacing:-.5px;margin-bottom:12px}
+.rcard p{font-size:14px;font-weight:300;color:var(--g300);line-height:1.75}
+
+footer{border-top:1px solid var(--border);padding:40px 24px;text-align:center}
+footer p{font-size:13px;font-weight:300;color:var(--g500);line-height:2}
+footer strong{color:var(--g300);font-weight:500}
+
+@keyframes rise{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+.reveal{opacity:0;transform:translateY(24px);transition:opacity .7s ease,transform .7s ease}.reveal.on{opacity:1;transform:translateY(0)}
+.leaflet-container{background:#0a0a0a}
+.ap-label{background:rgba(0,0,0,.82);border:1px solid rgba(10,132,255,.35);border-radius:8px;padding:4px 10px;color:var(--white);font-size:12px;font-weight:500;font-family:'Outfit',sans-serif;white-space:nowrap}
+
+@media(max-width:768px){
+  nav{padding:0 16px}.nav-links{display:none}
+  .hstats{flex-direction:column;width:100%}.hstat{border-right:none!important;border-bottom:1px solid var(--border)}.hstat:last-child{border-bottom:none}
+  .cgrid,.rgrid,.cpair,.choice-grid{grid-template-columns:1fr}.mband{grid-template-columns:1fr 1fr}
+  .demo-body{grid-template-columns:1fr;height:auto}.dside{height:340px}#map{height:300px}
+  .sec,.demo-wrap{padding-left:16px;padding-right:16px}
+}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">⚡ All<span>Clear</span></div>
+  <ul class="nav-links">
+    <li><a href="#probleme">Problème</a></li>
+    <li><a href="#approche">Approche</a></li>
+    <li><a href="#demo">Démo</a></li>
+    <li><a href="#resultats">Résultats</a></li>
+    <li><a href="#rse">RSE</a></li>
+  </ul>
+</nav>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="eyebrow-badge"><span class="live-dot"></span>Data Battle IA PAU 2026 · Meteorage · AllClear</div>
+  <h1>Fin d'alerte<br><span class="blue">foudre</span><br>en temps réel.</h1>
+  <p class="hero-sub">Un modèle XGBoost calibré qui remplace la règle fixe des 30 minutes par une probabilité calculée éclair par éclair — sur 5 aéroports européens.</p>
+  <div class="hero-cta">
+    <a href="#demo" class="btn-p">Voir la démo →</a>
+    <a href="#approche" class="btn-g">Notre approche</a>
+  </div>
+  <div class="hstats">
+    <div class="hstat"><div class="num" id="stat-auc">0.966</div><div class="lbl">AUC-ROC global</div></div>
+    <div class="hstat"><div class="num" id="stat-brier">0.018</div><div class="lbl">Brier Score</div></div>
+    <div class="hstat"><div class="num">1331<span class="unit">h</span></div><div class="lbl">gain de temps total</div></div>
+    <div class="hstat"><div class="num">1.8<span class="unit">%</span></div><div class="lbl">risque R à θ=0.3</div></div>
+  </div>
+</div>
+
+<!-- PROBLÈME -->
+<section id="probleme" class="sec">
+  <p class="eyebrow reveal">Le problème</p>
+  <h2 class="sec-title reveal">30 minutes d'attente.<br>Chaque alerte.<br>Sans exception.</h2>
+  <p class="sec-body reveal">La règle actuelle impose un délai fixe après le dernier éclair détecté dans un rayon de 6 miles. Elle ne tient pas compte de l'intensité de l'orage, de sa trajectoire, ni du temps déjà écoulé.</p>
+  <div class="cgrid">
+    <div class="fcard reveal"><div class="fcard-ico o">⏱</div><h3>La règle des 30 minutes</h3><p>Dès qu'un éclair est détecté à moins de 6 miles, tout s'arrête sur la piste. Le compteur repart à zéro à chaque nouveau coup, indépendamment de la distance ou de l'intensité.</p><div class="bstat o">30 min</div></div>
+    <div class="fcard reveal"><div class="fcard-ico r">💸</div><h3>Coût opérationnel</h3><p>Chaque minute d'immobilisation coûte environ 12 000 $ dans un grand aéroport. Les délais se propagent en cascade dans tout le réseau aérien mondial.</p><div class="bstat r">~12k$/min</div></div>
+    <div class="fcard reveal"><div class="fcard-ico g">✈️</div><h3>Impact quantifié</h3><p>Des recherches FAA montrent qu'une réduction de 30 à 15 minutes d'all-clear représente jusqu'à 1 568 minutes économisées par été à Orlando — soit 6,3 M$ de gains opérationnels.</p><div class="bstat g">+6,3 M$</div></div>
+    <div class="fcard reveal"><div class="fcard-ico b">🎯</div><h3>Notre réponse</h3><p>Produire une probabilité P(fin d'alerte) mise à jour à chaque éclair. Le seuil de déclenchement est un paramètre de risque ajustable par Meteorage — pas un hyperparamètre technique.</p><div class="bstat b">P(fin)</div></div>
+  </div>
+</section>
+
+<!-- APPROCHE TECHNIQUE -->
+<section id="approche" class="sec" style="padding-top:0">
+  <p class="eyebrow reveal">Approche technique</p>
+  <h2 class="sec-title reveal">Pipeline complet<br>en 5 étapes.</h2>
+  <p class="sec-body reveal">Chaque composant du pipeline a été choisi délibérément. Voici pourquoi.</p>
+
+  <div class="pipeline">
+
+    <div class="pstep reveal">
+      <div class="pnum">1</div>
+      <div class="pcont">
+        <h3>Données & preprocessing</h3>
+        <p>128 992 éclairs CG (nuage-sol) sur 10 ans, 2 627 alertes, 5 aéroports. Clé d'alerte : <code style="color:var(--blue);background:var(--blue-d);padding:1px 6px;border-radius:4px">airport + airport_alert_id</code> — l'identifiant seul n'est pas unique globalement. Les timestamps dupliqués (521 alertes concernées) sont résolus par un offset nanoseconde.</p>
+        <div class="tags"><span class="tag">128 992 éclairs CG</span><span class="tag">2 627 alertes</span><span class="tag">10 ans</span><span class="tag">5 aéroports</span><span class="tag g">clé composite airport+id</span></div>
+      </div>
+    </div>
+
+    <div class="pstep reveal">
+      <div class="pnum">2</div>
+      <div class="pcont">
+        <h3>Ingénierie des features — 36 variables</h3>
+        <p>Toutes les features sont calculables en temps réel (causalité stricte). Les fenêtres glissantes temporelles (5/10/15/30 min) capturent la dynamique de l'orage. Le comptage dédié des éclairs à moins de 3 km — suggéré par Stéphane Schmidtz (Meteorage) — traite séparément la zone de danger opérationnel.</p>
+        <div class="code-block">
+          <pre><span class="cm"># Fenêtres glissantes vectorisées (pandas rolling sur index datetime)</span>
+<span class="kw">for</span> w <span class="kw">in</span> [<span class="num">5</span>, <span class="num">10</span>, <span class="num">15</span>, <span class="num">30</span>]:
+    grp2 = grp.<span class="fn">set_index</span>(<span class="st">'date'</span>).<span class="fn">sort_index</span>()
+    count   = grp2[<span class="st">'amplitude_abs'</span>].<span class="fn">rolling</span>(f<span class="st">'{w*60}s'</span>, closed=<span class="st">'both'</span>).<span class="fn">count</span>()
+    close   = grp2[<span class="st">'is_close_raw'</span>].<span class="fn">rolling</span>(f<span class="st">'{w*60}s'</span>, closed=<span class="st">'both'</span>).<span class="fn">sum</span>()  <span class="cm"># &lt;3km</span></pre>
+        </div>
+        <div class="tags"><span class="tag">inter-temps</span><span class="tag">rolling 5/10/15/30min</span><span class="tag o">&lt;3 km Meteorage</span><span class="tag">amplitude trend</span><span class="tag">encodage cyclique</span></div>
+      </div>
+    </div>
+
+    <div class="pstep reveal">
+      <div class="pnum">3</div>
+      <div class="pcont">
+        <h3>Pourquoi XGBoost ?</h3>
+        <p>4 modèles comparés sur les mêmes données. XGBoost domine sur tous les aéroports. Il gère naturellement les déséquilibres de classes (2 627 positifs / 56 599 observations), supporte les valeurs manquantes, et est robuste aux features corrélées. La calibration est appliquée en post-processing.</p>
+        <div class="code-block">
+          <pre><span class="cm"># Résultats comparatifs</span>
+Heuristique (inter-temps > seuil)  →  AUC : 0.61  Brier : 0.039
+Régression logistique              →  AUC : 0.82  Brier : 0.028
+Random Forest                      →  AUC : 0.94  Brier : 0.022
+<span class="g" style="color:var(--green)">XGBoost + calibration isotonique   →  AUC : 0.966  Brier : 0.018</span></pre>
+        </div>
+        <div class="tags"><span class="tag g">XGBoost ✓</span><span class="tag">scale_pos_weight</span><span class="tag">n_estimators=300</span><span class="tag">max_depth=6</span></div>
+      </div>
+    </div>
+
+    <div class="pstep reveal">
+      <div class="pnum">4</div>
+      <div class="pcont">
+        <h3>Pourquoi la calibration isotonique ?</h3>
+        <p>XGBoost produit des scores discriminants mais pas nécessairement des probabilités calibrées. Sans calibration, une valeur de 0.8 ne correspond pas à 80% de chances réelles — ce qui rend le modèle inutilisable pour une décision opérationnelle. La calibration isotonique via <code style="color:var(--blue);background:var(--blue-d);padding:1px 4px;border-radius:4px">CalibratedClassifierCV</code> corrige cette déviation sans contrainte paramétrique.</p>
+        <div class="code-block">
+          <pre><span class="cm"># La calibration comme étape dédiée du pipeline</span>
+xgb_model = <span class="fn">XGBClassifier</span>(n_estimators=<span class="num">300</span>, max_depth=<span class="num">6</span>, ...)
+calibrated = <span class="fn">CalibratedClassifierCV</span>(xgb_model, method=<span class="st">'isotonic'</span>, cv=<span class="num">3</span>)
+calibrated.<span class="fn">fit</span>(X_train, y_train)
+<span class="cm"># Brier Score : 0.042 → 0.018 après calibration</span></pre>
+        </div>
+        <div class="tags"><span class="tag g">Brier 0.042 → 0.018</span><span class="tag">isotonique</span><span class="tag">cv=3</span></div>
+      </div>
+    </div>
+
+    <div class="pstep reveal">
+      <div class="pnum">5</div>
+      <div class="pcont">
+        <h3>Validation sans fuite de données</h3>
+        <p>Split par groupe d'alerte complet (<code style="color:var(--blue);background:var(--blue-d);padding:1px 4px;border-radius:4px">GroupShuffleSplit</code>). Aucun éclair d'une alerte de test n'apparaît en entraînement. La feature <code style="color:var(--red);background:rgba(255,69,58,.1);padding:1px 4px;border-radius:4px">alert_progress</code> (= 1.0 exactement au dernier éclair) a été identifiée et supprimée — c'était une fuite directe.</p>
+        <div class="tags"><span class="tag">GroupShuffleSplit</span><span class="tag">test_size=0.2</span><span class="tag r" style="color:var(--red);background:rgba(255,69,58,.1);border-color:rgba(255,69,58,.2)">alert_progress supprimée</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Choix techniques -->
+  <h3 style="font-size:22px;font-weight:700;letter-spacing:-.5px;margin-top:80px;margin-bottom:4px" class="reveal">Choix clés & justifications</h3>
+  <p style="font-size:15px;color:var(--g300);font-weight:300;margin-bottom:0" class="reveal">Chaque décision a une raison technique précise.</p>
+  <div class="choice-grid">
+    <div class="choice-card reveal">
+      <div class="choice-q">Métrique principale</div>
+      <div class="choice-a">Brier Score plutôt qu'AUC</div>
+      <div class="choice-why">L'AUC mesure le classement, pas la fiabilité des probabilités. Pour une décision opérationnelle basée sur un seuil θ, la calibration est critique — un score de 0.7 doit correspondre à 70% de probabilité réelle. Le Brier Score pénalise les probabilités mal calibrées.</div>
+    </div>
+    <div class="choice-card reveal">
+      <div class="choice-q">Fenêtres temporelles</div>
+      <div class="choice-a">Rolling sur index datetime</div>
+      <div class="choice-why">La boucle <code style="color:var(--blue)">iterrows()</code> initiale prenait plusieurs heures sur 128k éclairs. Le rolling pandas sur index datetime est entièrement vectorisé en C — le feature engineering passe en moins de 2 minutes.</div>
+    </div>
+    <div class="choice-card reveal">
+      <div class="choice-q">Évaluation du risque</div>
+      <div class="choice-a">Protocole Meteorage : R = M³/N³</div>
+      <div class="choice-why">Le risque R mesure la fraction d'éclairs à moins de 3 km ratés après notre prédiction. À θ=0.3, R=0.0184 &lt; 0.02 — on rate moins de 2% des éclairs dangereux. Le seuil θ est le curseur risque/gain que Meteorage règle.</div>
+    </div>
+    <div class="choice-card reveal">
+      <div class="choice-q">Format de prédiction</div>
+      <div class="choice-a">Une prédiction par éclair</div>
+      <div class="choice-why">À chaque éclair reçu, on émet une prédiction (date d'émission, date prédite de fin, score de confiance). Le jury sélectionne la première prédiction avec score ≥ θ. Ce format permet d'arbitrer entre réactivité et précision.</div>
+    </div>
+  </div>
+</section>
+
+<!-- DÉMO -->
+<div id="demo">
+  <div class="sec" style="padding-bottom:40px">
+    <p class="eyebrow reveal">Démonstration live</p>
+    <h2 class="sec-title reveal">Rejouer un orage réel.</h2>
+    <p class="sec-body reveal">Choisis un aéroport et une alerte. Regarde le modèle recalculer P(fin d'alerte) éclair par éclair, en conditions opérationnelles réelles.</p>
+  </div>
+  <div class="demo-wrap" style="padding-top:0">
+    <div class="demo-shell reveal">
+      <div class="loading-ov" id="loading">
+        <div class="spin"></div>
+        <div class="ltxt">Chargement des données…</div>
+        <div class="lhint">Lance <code>python predict.py</code> puis place <code>predictions.csv</code> dans le même dossier.</div>
+      </div>
+      <div class="demo-bar">
+        <div class="ctrl"><label>Aéroport</label><select id="sel-airport"><option value="">— Sélectionner —</option></select></div>
+        <div class="ctrl"><label>Alerte</label><select id="sel-alert" disabled><option value="">— Sélectionner —</option></select></div>
+        <div class="ctrl"><label>Vitesse : <span id="speed-val">×10</span></label><input type="range" id="speed" min="1" max="50" value="10"></div>
+        <div class="ctrl"><label>Rayon danger</label><select id="sel-radius"><option value="3">3 km (Meteorage)</option><option value="5">5 km</option><option value="10">10 km</option></select></div>
+        <button class="dbtn p" id="btn-play" disabled>▶ Lancer</button>
+        <button class="dbtn s" id="btn-reset" disabled>↺ Reset</button>
+      </div>
+      <div class="demo-body">
+        <div id="map"></div>
+        <div class="dside">
+          <div class="prob-sec">
+            <div class="prob-cap">P(fin d'alerte)</div>
+            <div class="prob-num" id="prob-val">—</div>
+            <div class="prob-track"><div class="prob-fill" id="prob-bar" style="width:0%"></div></div>
+            <div class="prob-lbl" id="prob-status">En attente de données…</div>
+          </div>
+          <div class="chart-sec"><canvas id="prob-chart"></canvas></div>
+          <div class="dfooter">
+            <div class="kpi"><span class="kpi-k">Éclairs</span><span class="kpi-v" id="info-count">0</span></div>
+            <div class="kpi"><span class="kpi-k">Écoulé</span><span class="kpi-v" id="info-elapsed">0 min</span></div>
+            <div class="kpi"><span class="kpi-k">Distance</span><span class="kpi-v" id="info-last">—</span></div>
+            <div class="kpi"><span class="kpi-k">&lt;3 km</span><span class="kpi-v" id="info-close" style="color:var(--green)">0</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- RÉSULTATS -->
+<section id="resultats" class="sec">
+  <p class="eyebrow reveal">Résultats</p>
+  <h2 class="sec-title reveal">Performances<br>sur 5 aéroports.</h2>
+  <p class="sec-body reveal">Évalués sur un test set d'alertes complètes jamais vues à l'entraînement (GroupShuffleSplit, 20%).</p>
+
+  <div class="mband">
+    <div class="mcard reveal"><div class="mcard-lbl">AUC-ROC global</div><div class="mcard-val b">0.966</div><div class="mcard-desc">Discrimination parfaite = 1.0. Mesuré sur alertes non vues à l'entraînement.</div></div>
+    <div class="mcard reveal"><div class="mcard-lbl">Brier Score</div><div class="mcard-val g">0.018</div><div class="mcard-desc">Calibration des probabilités. 0.0 = parfait. Après isotonic calibration.</div></div>
+    <div class="mcard reveal"><div class="mcard-lbl">Gain total</div><div class="mcard-val o">1331h</div><div class="mcard-desc">Gain cumulé sur toutes les alertes d'entraînement à θ=0.3 vs baseline 30 min.</div></div>
+    <div class="mcard reveal"><div class="mcard-lbl">Risque R à θ=0.3</div><div class="mcard-val">1.84%</div><div class="mcard-desc">Fraction d'éclairs &lt;3km ratés. Seuil acceptable : R &lt; 2% (protocole Meteorage).</div></div>
+  </div>
+
+  <!-- Tableau par aéroport -->
+  <div style="margin-top:2px;border:1px solid var(--border);border-radius:var(--rxxl);overflow:hidden">
+    <div class="cbox reveal" style="padding-bottom:8px">
+      <h3>Performances par aéroport</h3>
+      <table class="res-table">
+        <thead>
+          <tr><th>Aéroport</th><th>AUC-ROC</th><th>Brier Score</th><th>Note</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Ajaccio</td><td>0.9675</td><td>0.0226</td><td><span class="pill g">✓ Solide</span></td></tr>
+          <tr><td>Bastia</td><td>0.9792</td><td>0.0105</td><td><span class="pill g">✓ Meilleur</span></td></tr>
+          <tr><td>Biarritz</td><td>0.9385</td><td>0.0349</td><td><span class="pill o">△ Orages courts</span></td></tr>
+          <tr><td>Nantes</td><td>0.9208</td><td>0.0303</td><td><span class="pill o">△ Moins de données</span></td></tr>
+          <tr><td>Pise</td><td>0.9682</td><td>0.0151</td><td><span class="pill g">✓ Solide</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Tableau theta -->
+  <div style="margin-top:2px;border:1px solid var(--border);border-radius:var(--rxxl);overflow:hidden">
+    <div class="cbox reveal" style="padding-bottom:8px">
+      <h3>Arbitrage Gain / Risque par seuil θ</h3>
+      <p style="font-size:13px;color:var(--g500);margin-bottom:0;font-weight:300">R<sub>accept</sub> = 0.02 (protocole Meteorage). Le seuil optimal maximise le gain sous contrainte de risque.</p>
+      <table class="theta-table">
+        <thead><tr><th>θ</th><th>Gain (heures)</th><th>Risque R</th><th>Safe ?</th></tr></thead>
+        <tbody>
+          <tr><td>0.05</td><td>2322.8</td><td>0.7271</td><td style="color:var(--red)">❌</td></tr>
+          <tr><td>0.10</td><td>2134.1</td><td>0.4565</td><td style="color:var(--red)">❌</td></tr>
+          <tr><td>0.20</td><td>1659.7</td><td>0.1165</td><td style="color:var(--red)">❌</td></tr>
+          <tr><td>0.25</td><td>1482.2</td><td>0.0662</td><td style="color:var(--red)">❌</td></tr>
+          <tr class="best"><td><strong>0.30</strong></td><td><strong>1331.2</strong></td><td><strong>0.0184</strong></td><td style="color:var(--green)"><strong>✅ Optimal</strong></td></tr>
+          <tr><td>0.40</td><td>1006.1</td><td>0.0048</td><td style="color:var(--green)">✅</td></tr>
+          <tr><td>0.50</td><td>823.8</td><td>0.0008</td><td style="color:var(--green)">✅</td></tr>
+          <tr><td>0.70</td><td>583.0</td><td>0.0000</td><td style="color:var(--green)">✅</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Graphes -->
+  <div class="cpair" style="margin-top:2px">
+    <div class="cbox reveal"><h3>Courbe ROC — par aéroport</h3><img src="charts/roc_curves.png" alt="ROC" style="width:100%;border-radius:8px"></div>
+    <div class="cbox reveal"><h3>Calibration des probabilités</h3><img src="charts/calibration.png" alt="Calibration" style="width:100%;border-radius:8px"></div>
+  </div>
+  <div class="cpair" style="margin-top:2px">
+    <div class="cbox reveal"><h3>Distribution des probabilités prédites</h3><img src="charts/prob_distribution.png" alt="Distribution" style="width:100%;border-radius:8px"></div>
+    <div class="cbox reveal"><h3>Arbitrage couverture / sécurité</h3><img src="charts/coverage_safety.png" alt="Coverage" style="width:100%;border-radius:8px"></div>
+  </div>
+  <div style="margin-top:2px;border:1px solid var(--border);border-radius:var(--rxxl);overflow:hidden">
+    <div class="cbox reveal"><h3>Risque de faux négatifs selon le seuil</h3><img src="charts/false_negatives.png" alt="FN" style="width:100%;max-width:700px;display:block;margin:0 auto;border-radius:8px"></div>
+  </div>
+</section>
+
+<!-- RSE -->
+<section id="rse" class="sec" style="padding-top:0">
+  <p class="eyebrow reveal">Responsabilité</p>
+  <h2 class="sec-title reveal">Au-delà<br>de la performance.</h2>
+  <p class="sec-body reveal">Un bon modèle ne suffit pas. Il faut anticiper ses effets secondaires et les responsabilités qu'il crée.</p>
+  <div class="rgrid">
+    <div class="rcard reveal"><span class="rchip w">Effet rebond</span><h3>Trafic aérien & émissions</h3><p>Des alertes plus courtes pourraient faciliter plus de rotations et augmenter les émissions nettes. Ce lien est très indirect — les politiques de trafic restent le principal levier. Les économies immédiates viennent de la réduction des délais au sol, pas de vols supplémentaires.</p></div>
+    <div class="rcard reveal"><span class="rchip d">Risque critique</span><h3>Sécurité des agents de piste</h3><p>Un faux négatif — prédire la fin trop tôt — expose directement les équipes au sol à un risque physique. Le seuil θ est une décision de responsabilité appartenant à Meteorage, pas un hyperparamètre technique. À θ=0.3, R=1.84% : 23 éclairs dangereux ratés sur 1 253.</p></div>
+    <div class="rcard reveal"><span class="rchip i">Innovation opérationnelle</span><h3>Zone 3 km : priorité Meteorage</h3><p>Suite à la discussion avec Stéphane Schmidtz (Meteorage), le modèle intègre des features dédiées aux éclairs à moins de 3 km — nettement plus dangereux pour les équipes. Ces features reçoivent un traitement séparé dans le pipeline de features.</p></div>
+    <div class="rcard reveal"><span class="rchip n">Transparence</span><h3>Probabilités calibrées & auditables</h3><p>Les probabilités sont calibrées isotoniquement — 80% correspond à 80% de fins d'alerte réelles. Le Brier Score valide cette calibration. Le modèle produit des valeurs interprétables, pas un score opaque.</p></div>
+  </div>
+</section>
+
+<footer>
+  <p><strong>AllClear</strong> · Data Battle IA PAU 2026 · Partenariat Meteorage · Équipe solo</p>
+  <p>XGBoost + calibration isotonique · 5 aéroports · 128 992 éclairs CG · 10 ans · AUC 0.966 · Brier 0.018</p>
+</footer>
+
+<script>
+const AIRPORTS={"Ajaccio":{lat:41.9236,lon:8.8017},"Bastia":{lat:42.5528,lon:9.4837},"Biarritz":{lat:43.4683,lon:-1.5311},"Nantes":{lat:47.1532,lon:-1.6108},"Pise":{lat:43.6839,lon:10.3927}};
+let allData=[],animInterval=null,animIdx=0,currentStrikes=[],map=null,strikeMarkers=[],radiusCircle=null,probChart=null,chartLabels=[],chartData=[];
+
+function initMap(lat,lon){if(map){map.remove();map=null}map=L.map('map',{zoomControl:true,attributionControl:false}).setView([lat,lon],10);L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:19}).addTo(map)}
+function addAirportMarker(airport){const c=AIRPORTS[airport];if(!c||!map)return;const icon=L.divIcon({className:'',html:`<div class="ap-label">✈ ${airport}</div>`,iconAnchor:[0,0]});L.marker([c.lat,c.lon],{icon}).addTo(map);const r=parseInt(document.getElementById('sel-radius').value)*1000;if(radiusCircle)radiusCircle.remove();radiusCircle=L.circle([c.lat,c.lon],{radius:r,color:'#ff453a',fillColor:'#ff453a',fillOpacity:.04,weight:1,dashArray:'4,6'}).addTo(map)}
+function initProbChart(){if(probChart)probChart.destroy();probChart=new Chart(document.getElementById('prob-chart').getContext('2d'),{type:'line',data:{labels:chartLabels,datasets:[{data:chartData,borderColor:'#0A84FF',backgroundColor:'rgba(10,132,255,0.08)',borderWidth:1.5,pointRadius:0,fill:true,tension:.4}]},options:{animation:false,responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{enabled:false}},scales:{x:{display:false},y:{min:0,max:1,grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#636366',font:{size:10,family:'Outfit'},callback:v=>Math.round(v*100)+'%'},border:{color:'transparent'}}}}})}
+function loadData(){Papa.parse('predictions.csv',{download:true,header:true,dynamicTyping:true,complete:function(r){allData=r.data.filter(x=>x.airport&&x.airport_alert_id);document.getElementById('loading').style.display='none';populateAirports()},error:()=>{}})}
+function populateAirports(){const airports=[...new Set(allData.map(r=>r.airport))].sort();const sel=document.getElementById('sel-airport');airports.forEach(a=>{const o=document.createElement('option');o.value=a;o.textContent=a;sel.appendChild(o)})}
+function populateAlerts(airport){const sel=document.getElementById('sel-alert');sel.innerHTML='<option value="">— Sélectionner —</option>';const uid2id={};allData.filter(r=>r.airport===airport).forEach(r=>{const uid=r.alert_uid||r.airport+'_'+r.airport_alert_id;uid2id[uid]=r.airport_alert_id});const uids=Object.keys(uid2id);const sorted=uids.sort((a,b)=>allData.filter(r=>(r.alert_uid||r.airport+'_'+r.airport_alert_id)===b).length-allData.filter(r=>(r.alert_uid||r.airport+'_'+r.airport_alert_id)===a).length).slice(0,30);sorted.forEach(uid=>{const n=allData.filter(r=>(r.alert_uid||r.airport+'_'+r.airport_alert_id)===uid).length;const o=document.createElement('option');o.value=uid;o.textContent=`Alerte ${uid} — ${n} éclairs`;sel.appendChild(o)});sel.disabled=false}
+function startAnimation(){const airport=document.getElementById('sel-airport').value;const uid=document.getElementById('sel-alert').value;if(!airport||!uid)return;currentStrikes=allData.filter(r=>(r.alert_uid||r.airport+'_'+r.airport_alert_id)===uid).sort((a,b)=>new Date(a.date)-new Date(b.date));if(!currentStrikes.length)return;const coord=AIRPORTS[airport];initMap(coord.lat,coord.lon);addAirportMarker(airport);strikeMarkers=[];chartLabels=[];chartData=[];initProbChart();animIdx=0;document.getElementById('btn-play').disabled=true;document.getElementById('btn-reset').disabled=false;updateProbUI(0,'Simulation en cours…');const speed=parseInt(document.getElementById('speed').value);animInterval=setInterval(()=>{if(animIdx>=currentStrikes.length){clearInterval(animInterval);document.getElementById('btn-play').disabled=false;document.getElementById('prob-status').textContent='✓ Simulation terminée';return}renderStrike(currentStrikes[animIdx]);animIdx++},Math.max(30,500/speed))}
+function renderStrike(s){const prob=s.prob||0;const amp=Math.abs(s.amplitude||0);const isClose=s.dist<parseFloat(document.getElementById('sel-radius').value);const isLast=s.is_last_lightning_cloud_ground==1||s.is_last_lightning_cloud_ground===true;let color='#0A84FF';if(amp>60||isClose)color='#ff453a';else if(amp>30)color='#ff9f0a';const size=Math.max(6,Math.min(18,amp/5));if(map){const icon=L.divIcon({className:'',html:`<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};opacity:.9;box-shadow:0 0 ${size*1.5}px ${color}80"></div>`,iconAnchor:[size/2,size/2]});const marker=L.marker([s.lat,s.lon],{icon}).addTo(map);strikeMarkers.push(marker);if(strikeMarkers.length>80){const old=strikeMarkers.shift();old.remove()}}updateProbUI(prob,isLast?'⚡ Dernier éclair de l\'alerte':getStatus(prob));chartLabels.push(animIdx);chartData.push(prob);if(probChart){probChart.data.labels=[...chartLabels];probChart.data.datasets[0].data=[...chartData];probChart.update('none')}document.getElementById('info-count').textContent=animIdx+1;document.getElementById('info-elapsed').textContent=(s.elapsed_min||0).toFixed(1)+' min';document.getElementById('info-last').textContent=s.dist?s.dist.toFixed(1)+' km':'—';const closeCount=currentStrikes.slice(0,animIdx+1).filter(x=>x.dist<3).length;const el=document.getElementById('info-close');el.textContent=closeCount;el.style.color=closeCount>0?'var(--red)':'var(--green)'}
+function getStatus(p){if(p>.85)return'Fin d\'alerte probable — décision possible';if(p>.6)return'Probabilité en hausse';if(p>.3)return'Orage encore actif';return'Alerte active — risque élevé'}
+function updateProbUI(p,status){const pct=Math.round(p*100);const el=document.getElementById('prob-val');el.textContent=p>0?pct+'%':'—';document.getElementById('prob-bar').style.width=pct+'%';document.getElementById('prob-status').textContent=status;if(p>.75){el.style.color='var(--green)';document.getElementById('prob-bar').style.background='var(--green)';document.getElementById('prob-status').style.color='var(--green)'}else if(p>.4){el.style.color='var(--orange)';document.getElementById('prob-bar').style.background='var(--orange)';document.getElementById('prob-status').style.color='var(--orange)'}else{el.style.color=p>0?'var(--red)':'var(--g500)';document.getElementById('prob-bar').style.background=p>0?'var(--red)':'var(--blue)';document.getElementById('prob-status').style.color='var(--g500)'}}
+function resetAnimation(){clearInterval(animInterval);animIdx=0;strikeMarkers.forEach(m=>m&&m.remove());strikeMarkers=[];chartLabels=[];chartData=[];if(probChart){probChart.data.labels=[];probChart.data.datasets[0].data=[];probChart.update()}updateProbUI(0,'En attente de données…');document.getElementById('prob-val').textContent='—';['info-count','info-elapsed','info-last'].forEach(id=>document.getElementById(id).textContent=id==='info-count'?'0':id==='info-elapsed'?'0 min':'—');document.getElementById('info-close').textContent='0';document.getElementById('btn-play').disabled=false}
+
+document.getElementById('sel-airport').addEventListener('change',function(){if(!this.value)return;populateAlerts(this.value);const c=AIRPORTS[this.value];if(c){initMap(c.lat,c.lon);addAirportMarker(this.value);initProbChart()}});
+document.getElementById('sel-alert').addEventListener('change',function(){document.getElementById('btn-play').disabled=!this.value});
+document.getElementById('speed').addEventListener('input',function(){document.getElementById('speed-val').textContent='×'+this.value});
+document.getElementById('btn-play').addEventListener('click',startAnimation);
+document.getElementById('btn-reset').addEventListener('click',resetAnimation);
+
+const obs=new IntersectionObserver(entries=>entries.forEach(e=>{if(e.isIntersecting)e.target.classList.add('on')}),{threshold:.08});
+document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
+window.addEventListener('load',()=>{initMap(44.5,5.5);initProbChart();loadData()});
+</script>
+</body>
+</html>
