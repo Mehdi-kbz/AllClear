@@ -1257,17 +1257,14 @@
       <div class="fcard reveal">
         <div class="fcard-ico r">💸</div>
         <h3>Coût opérationnel</h3>
-        <p>Chaque minute d'immobilisation coûte environ 166 € par avion dans un aéroport (d'après AESA). Les délais se
-          propagent
-          en
-          cascade dans tout le réseau aérien mondial.</p>
-        <div class="bstat r">~166 €/min</div>
+        <p>À l’échelle d’un aéroport, les retards peuvent représenter environ 2 000 € par minute lors des périodes de forte activité, en se basant sur un coût moyen de 80 à 100 € par minute et par avion (<a href="https://www.eurocontrol.int/sites/default/files/publication/files/european-airline-delay-cost-reference-values-final-report-4-1.pdf" target="_blank">EUROCONTROL</a>) et sur plusieurs vols retardés simultanément. Ces retards ont par ailleurs tendance à se propager en cascade dans l’ensemble du réseau aérien.</p>
+        <div class="bstat r">~ €2000/min</div>
       </div>
       <div class="fcard reveal">
         <div class="fcard-ico b">✈️</div>
         <h3>Impact environnemental</h3>
         <p>Chaque minute d'immobilisation au sol a un coût environnemental direct : un seul A320 en attente émet près de
-          400 kg de CO₂ par heure en mode APU, sans avancer d'un mètre — soit l'équivalent de plusieurs trajets
+          <a href="https://blog.openairlines.com/how-to-track-apu-fuel-burn-on-ground?utm_source=chatgpt.com" target="_blank">400 kg</a> de CO₂ par heure en mode APU, sans avancer d'un mètre — soit l'équivalent de plusieurs trajets
           Paris-Lyon en voiture.
         </p>
         <div class="bstat r">400 kg CO2</div>
@@ -1653,10 +1650,8 @@ calibrated.<span class="fn">fit</span>(X_train, y_train)
       responsabilités qu'il crée.</p>
     <div class="rgrid">
       <div class="rcard reveal"><span class="rchip w">Effet rebond</span>
-        <h3>Trafic aérien & émissions</h3>
-        <p>Des alertes plus courtes pourraient faciliter plus de rotations et augmenter les émissions nettes. Ce lien
-          est très indirect — les politiques de trafic restent le principal levier. Les économies immédiates viennent de
-          la réduction des délais au sol, pas de vols supplémentaires.</p>
+        <h3>Empreinte carbone des inférences</h3>
+        <p>Un modèle en production émet une prédiction à chaque éclair, en continu, sur 5 aéroports. Les inférences répétées sur serveur génèrent une consommation énergétique non négligeable. Ce coût carbone doit être mis en balance avec les gains opérationnels — et justifie de privilégier un modèle léger et efficace comme XGBoost plutôt qu'un réseau de neurones profond.</p>
       </div>
       <div class="rcard reveal"><span class="rchip d">Risque critique</span>
         <h3>Sécurité des agents de piste</h3>
