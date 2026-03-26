@@ -3,7 +3,10 @@
 ## 👥 Équipe
 - Nom de l'équipe : AllClear
 - Membres :
-  - Khabouze Mehdi
+  - Mehdi Khabouze
+  - Hiba Knizia
+  - Quenza Rzal
+  - Ilhame Daoui
 
 ## 🎯 Problématique
 Les aéroports appliquent une règle fixe : attendre 30 minutes après le dernier éclair détecté à moins de 6 miles avant de rouvrir les pistes. Cette règle ignore la dynamique réelle de l'orage et génère des immobilisations coûteuses (~12 000 $/minute). L'objectif est de remplacer ce délai fixe par une probabilité de fin d'alerte mise à jour en temps réel, éclair par éclair.
