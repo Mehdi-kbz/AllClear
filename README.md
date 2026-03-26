@@ -5,7 +5,7 @@
 - Membres :
   - Mehdi Khabouze
   - Hiba Knizia
-  - Quenza Rzal
+  - Kenza Rzal
   - Ilhame Daoui
 
 ## 🎯 Problématique
