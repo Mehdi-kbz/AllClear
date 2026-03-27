@@ -60,7 +60,8 @@ print("\n[4/5] Formatage des prédictions...")
 # - predicted_date_end_alert = date de l'éclair lui-même
 #   (on dit : "à ce moment, je pense que l'alerte est terminée")
 # - confidence = probabilité du modèle
-
+# Le jury prendra le premier éclair où confidence >= theta
+# et vérifiera si des éclairs dangereux tombent après cette date
 
 rows = []
 for (airport, alert_id), grp in known_feat.groupby(['airport', 'airport_alert_id']):
@@ -75,6 +76,9 @@ for (airport, alert_id), grp in known_feat.groupby(['airport', 'airport_alert_id
         })
 
 predictions = pd.DataFrame(rows)
+# Tronquer à la seconde — supprimer les nanosecondes ajoutées pour dédupliquer
+predictions["prediction_date"] = pd.to_datetime(predictions["prediction_date"]).dt.floor("s")
+predictions["predicted_date_end_alert"] = pd.to_datetime(predictions["predicted_date_end_alert"]).dt.floor("s")
 predictions.to_csv(OUTPUT_FILE, index=False)
 print(f"    {len(predictions):,} prédictions → {OUTPUT_FILE}")
 
@@ -115,7 +119,7 @@ print("    " + "-"*42)
 best_theta, best_gain = None, -1
 for theta, (gain, missed) in sorted(results.items()):
     R = missed / tot_l3 if tot_l3 > 0 else 0
-    safe = "Good" if R < R_ACCEPT else "Error"
+    safe = "✅" if R < R_ACCEPT else "❌"
     print(f"    {theta:>6.2f} | {gain/3600:>10.1f} | {R:>10.4f} | {safe}")
     if R < R_ACCEPT and gain > best_gain:
         best_gain = gain
@@ -126,6 +130,6 @@ print(f"    ➤ Gain de temps  : {best_gain/3600:.1f} heures")
 print(f"    ➤ Risque R       : {results[best_theta][1]/tot_l3:.4f} < {R_ACCEPT}")
 
 print(f"\n{'='*60}")
-print(f" Soumission prête : {OUTPUT_FILE}")
+print(f"✅ Soumission prête : {OUTPUT_FILE}")
 print(f"   Envoie ce fichier + theta={best_theta} à contact@iapau.org")
 print(f"{'='*60}")
