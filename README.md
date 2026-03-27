@@ -97,6 +97,13 @@ Sur l'ensemble du dataset, les émissions évitées atteignent **317 700 kg CO�
 - `test_data/dataset_set.csv` dans le sous-dossier `test_data/`
 
 ### Installation
+
+### Cloner le dépôt
+```bash
+git clone https://github.com/Mehdi-kbz/AllClear.git
+cd AllClear
+```
+### Installer les dependencies
 ```bash
 pip install xgboost scikit-learn pandas numpy matplotlib seaborn
 ```
